@@ -44,7 +44,7 @@ export const createAdminAccount = async data => userApi.post('/admin/users', dat
 export const getOtherUser = async data => userApi.get(`/user/${data}`)
 
 // matching-service
-export const findMatch = async data => matchingApi.post('api/matches/', data);
+export const findMatch = async data => matchingApi.post('/api/matches', data);
 
 // question-service
 export const getTopics = async () => {
