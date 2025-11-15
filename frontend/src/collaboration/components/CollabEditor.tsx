@@ -87,7 +87,7 @@ export default function CollabEditor({
 
       {/* Footer with Run button */}
       <div className="pl-4 py-1.5 pr-2 flex justify-between items-center flex-shrink-0">
-        <span className="text-sm text-gray-500">Python 3.9 Line 20, Column 14</span>
+        {/* <span className="text-sm text-gray-500">Python 3.9 Line 20, Column 14</span> */}
         <button
           onClick={handleRun}
           disabled={!testcases || testcases.length === 0 || isExecuting}

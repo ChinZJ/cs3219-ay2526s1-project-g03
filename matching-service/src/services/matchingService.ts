@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import axios from 'axios';
 import type { MatchCriteria, PendingMatch, ValidQuestion } from '../models/matchModel';
 import redisClient from '../config/redis';
+import { createRedisClient } from '../config/redis';
 import { QUESTION_SERVICE_URL, COLLAB_SERVICE_URL, HISTORY_SERVICE_URL } from '../constants/env';
 import {
   DIFFICULTY_MAP,
@@ -17,6 +18,34 @@ import {
 // --- Global State & In-Memory Storage ---
 export const activeConnections = new Map<string, WebSocket>();
 const pendingMatches = new Map<string, PendingMatch>(); // session id will be the key
+
+const redisPub = createRedisClient(); // For publishing messages
+const redisSub = createRedisClient(); // For subscribing to messages
+
+redisSub.subscribe('ws:messages', (err) => {
+  if (err) {
+    console.error('Failed to subscribe to ws:messages:', err);
+  } else {
+    console.log('Subscribed to ws:messages channel');
+  }
+});
+
+redisSub.on('message', (channel, message) => {
+  if (channel === 'ws:messages') {
+    try {
+      const { userId, payload } = JSON.parse(message);
+      const connection = activeConnections.get(userId);
+      
+      // Only send if this instance has the user's connection
+      if (connection && connection.readyState === WebSocket.OPEN) {
+        connection.send(JSON.stringify(payload));
+        console.log(`✓ Delivered message to ${userId} on this instance`);
+      }
+    } catch (error) {
+      console.error('Error processing pub/sub message:', error);
+    }
+  }
+});
 
 // --- Redis Keys & Timeouts ---
 const WAITING_ROOM_KEY = 'matching:waiting_room';
@@ -629,13 +658,15 @@ const autoDeclineMatch = (sessionId: string) => {
 /**
  * Helper to send a JSON message to a specific user via WebSocket.
  */
-const sendWebSocketMessage = (userId: string, message: { type?: string } & Record<string, unknown>) => {
-  const connection = activeConnections.get(userId);
-  if (connection && connection.readyState === WebSocket.OPEN) {
-    connection.send(JSON.stringify(message));
-    console.log(`Sent message to ${userId}: ${message.type ?? 'unknown'}`);
-  } else {
-    console.warn(`Could not find or send message to user ${userId}, connection not open.`);
+const sendWebSocketMessage = async (userId: string, message: { type?: string } & Record<string, unknown>) => {
+  try {
+    await redisPub.publish('ws:messages', JSON.stringify({
+      userId,
+      payload: message
+    }));
+    console.log(`📡 Published message for ${userId} to all instances (type: ${message.type ?? 'unknown'})`);
+  } catch (error) {
+    console.error(`Error publishing message for ${userId}:`, error);
   }
 };
 
